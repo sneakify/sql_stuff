@@ -6,7 +6,7 @@ drop table if exists buy;
 drop table if exists sell;
 drop table if exists top_50;
     
- 
+    
  create table artist (
 	artist_id int primary key,
     artist_name varchar(75) not null,
@@ -29,7 +29,7 @@ create table song(
     title varchar(75) not null,
     artist_id int not null,
     album_id int not null,
-    daily_plays int not null,
+    song_rank int not null,
     constraint fk_artist_id_song foreign key(artist_id) references artist(artist_id),
     constraint fk_album_id_song foreign key(album_id) references album(album_id)
     );
@@ -111,23 +111,8 @@ From sell
 Group by user_id, spotify_id;  
 
 
-Select user_id, sum(total_value) + purchasing_power as portfolio_value
-From
-	(Select user_id, spotify_id, shares_owned * daily_plays as total_value
-	From
-		(Select user_id, spotify_id, user_bought - coalesce(user_sold,0) as shares_owned
-		From 
-			(Select user_id, spotify_id, sum(n_shares) as user_bought
-			From buy
-			Group by user_id, spotify_id) as total_bought
-		Left Join 
-			(Select user_id, spotify_id, sum(n_shares) as user_sold
-			From sell
-			Group by user_id, spotify_id) as total_sold
-			Using (user_id, spotify_id)) as user_total
-	Join song Using (spotify_id)) as user_share_value
-	Join user Using (user_id)
-    Group by user_id;
+
+
 
 Select user_id, spotify_id, user_bought - coalesce(user_sold,0) as shares_owned
 		From 
@@ -147,15 +132,15 @@ Drop Trigger If Exists buy_triggers;
 
 Delimiter //
 
-Create Trigger buy_triggers_
+Create Trigger buy_triggers
 	Before Insert On buy
     For Each Row
 Begin
-	If (New.price * New.n_shares > user.purchasing_power) Then
+	If ((New.price * New.n_shares) > user.purchasing_power) Then
 		Signal Sqlstate 'HYOOO'
 			Set Message_Text = 'Insufficient Funds';
 	End If;
-    If (time(New.purchase_time) < '9:30' Or time(New.purchase_time) > '4:30') Then
+    If (time(New.purchase_time) < '9:30' Or time(New.purchase_time) > '16:30') Then
 		Signal Sqlstate 'HYOOO'
 			Set Message_Text = 'Market Closed';
 	Else
@@ -163,32 +148,58 @@ Begin
         Set purchasing_power = purchasing_power - (New.n_shares * New.price)
         Where user.user_id = New.user_id;
 	End If;
-End; //
+End //
 
 -- buy trigger testing
 
 -- selling trigger
+
+Delimiter //
+
+-- function that calculates shares of given stock bought by a given user
+CREATE FUNCTION shares_bought (u_id INT, s_id INT)
+RETURNS INT
+
+BEGIN
+DECLARE bought INT;
+
+Select user_id, sum(n_shares) into bought
+From buy
+Where u_id = user_id And s_id = spotify_id
+Group by user_id, spotify_id;
+
+RETURN bought;
+END //
+
+Delimiter //
+
+-- function that calculates shares of given stock sold by a given user
+CREATE FUNCTION shares_sold (u_id INT, s_id INT)
+RETURNS INT
+
+BEGIN
+DECLARE sold INT;
+
+Select user_id, sum(n_shares) into sold
+From sell
+Where u_id = user_id And s_id = spotify_id
+Group by user_id, spotify_id;
+
+RETURN sold;
+END //
+
+
 Drop Trigger If Exists sell_triggers;
 
 Delimiter //
 
--- trigger based off of shares being bought
-Select user_id, sum(n_shares) as shares_bought
-From buy
-Group by user_id, spotify_id;
-
-Select user_id, sum(n_shares) as shares_sold
-From sell
-Group by user_id, spotify_id;
-
-Select user_id, 
 
 -- trigger based of sales being made
 Create Trigger sell_triggers
 	Before Insert On sell
     For Each Row
 Begin
-	If (New.n_shares > shares_bought - shares_sold) Then
+	If (New.n_shares > shares_bought(New.user_id, New.spotify_id) - shares_sold(New.user_id, New.spotify_id)) Then
 		Signal Sqlstate 'HYOOO'
 			Set Message_Text = 'Not Enough Shares';
 	End If;
@@ -199,36 +210,56 @@ Begin
 		Update user
         Set purchasing_power = purchasing_power + (New.n_shares * New.price)
         Where user.user_id = New.user_id;
-			Set Message_Text = 'Sale Made';
 	End If;
-End; //
+End //
     
+
 -- resets song value every day
 create event reset_song_value
 	on schedule every 1 day
-	starts '2019-01-01 00:00:00' 
+	starts '2019-01-01 00:03:00' 
 do
-	update song_history
+	update song
     set date = curdate(),
 		day_value = 0;
 
+
 -- updates song history every day
-create event update_song
+create event update_song_history
 	on schedule every 1 day
 	starts '2019-01-01 00:05:00' 
 do
-	update song_history
-    set date = curdate(),
-		day_value = top_50.daily_plays;
+	insert into song_history
+    select curdate(), spotify_id, song_rank
+    from song;
 
 -- updates user history every day
-create event update_user
+create event update_user_history
 	on schedule every 1 day
-	starts '2019-01-01 00:00:00'
+	starts '2019-01-01 00:09:30'
 do
-	update user_history
-    set date = curdate(),
-		portfolio_value = user.portfolio_value;
+	insert into user_history
+    select curdate(), user_id, portfolio_value
+    from 
+    (Select user_id, (sum(total_value) + purchasing_power) as portfolio_value
+		From
+		(Select user_id, spotify_id, shares_owned * song_rank as total_value
+		From
+			(Select user_id, spotify_id, user_bought - coalesce(user_sold,0) as shares_owned
+			From 
+				(Select user_id, spotify_id, sum(n_shares) as user_bought
+				From buy
+				Group by user_id, spotify_id) as total_bought
+			Left Join 
+				(Select user_id, spotify_id, sum(n_shares) as user_sold
+				From sell
+				Group by user_id, spotify_id) as total_sold
+				Using (user_id, spotify_id)) as user_total
+		Join song Using (spotify_id)) as user_share_value
+	Join user Using (user_id)
+	Group by user_id) as daily_portfolio
+Where user.user_id = daily_portfolio.user_id;
 
 
-    
+
+
