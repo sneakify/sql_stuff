@@ -6,7 +6,7 @@ use spootify;
 
         
 create table genre (
-	genre_id int primary key,
+	genre_id varchar(10) primary key,
     genre_name varchar(30)
     );
  
@@ -20,7 +20,7 @@ insert into genre values
  create table artist (
 	artist_id varchar(10) primary key,
     artist_name varchar(75) not null,
-    genre_id int not null,
+    genre_id varchar(10) not null,
     constraint fk_genre_id_artist foreign key(genre_id) references genre(genre_id)
     );
 
