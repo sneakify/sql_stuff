@@ -73,31 +73,41 @@ create table song_history (
     );
     
 insert into song_history values 
-    ('2019-04-08', '1', 311),
-    ('2019-04-08', '2', 202),
-    ('2019-04-08', '3', 118),
-    ('2019-04-08', '4', 53),
-    ('2019-04-08', '5', 108),
-    ('2019-04-09', '1', 310),
-    ('2019-04-09', '2', 197),
-    ('2019-04-09', '3', 115),
-    ('2019-04-09', '4', 51),
-    ('2019-04-09', '5', 111),
-    ('2019-04-10', '1', 293),
-    ('2019-04-10', '2', 187),
-    ('2019-04-10', '3', 116),
-    ('2019-04-10', '4', 49),
-    ('2019-04-10', '5', 121),
-    ('2019-04-11', '1', 271),
-    ('2019-04-11', '2', 182),
-    ('2019-04-11', '3', 108),
-    ('2019-04-11', '4', 47),
-    ('2019-04-11', '5', 110),
-    ('2019-04-12', '1', 281),
-    ('2019-04-12', '2', 189),
-    ('2019-04-12', '3', 110),
-    ('2019-04-12', '4', 97),
-    ('2019-04-12', '5', 118);
+    ('2019-04-13', '1', 311),
+    ('2019-04-13', '2', 202),
+    ('2019-04-13', '3', 118),
+    ('2019-04-13', '4', 53),
+    ('2019-04-13', '5', 108),
+    ('2019-04-14', '1', 310),
+    ('2019-04-14', '2', 197),
+    ('2019-04-14', '3', 115),
+    ('2019-04-14', '4', 51),
+    ('2019-04-14', '5', 111),
+    ('2019-04-15', '1', 293),
+    ('2019-04-15', '2', 187),
+    ('2019-04-15', '3', 116),
+    ('2019-04-15', '4', 49),
+    ('2019-04-15', '5', 121),
+    ('2019-04-16', '1', 271),
+    ('2019-04-16', '2', 182),
+    ('2019-04-16', '3', 108),
+    ('2019-04-16', '4', 47),
+    ('2019-04-16', '5', 110),
+    ('2019-04-17', '1', 281),
+    ('2019-04-17', '2', 189),
+    ('2019-04-17', '3', 110),
+    ('2019-04-17', '4', 97),
+    ('2019-04-17', '5', 118),
+    ('2019-04-18', '1', 281),
+    ('2019-04-18', '2', 189),
+    ('2019-04-18', '3', 110),
+    ('2019-04-18', '4', 97),
+    ('2019-04-18', '5', 118),
+    ('2019-04-19', '1', 281),
+    ('2019-04-19', '2', 189),
+    ('2019-04-19', '3', 110),
+    ('2019-04-19', '4', 97),
+    ('2019-04-19', '5', 118);
     
     
     
@@ -122,6 +132,17 @@ create table user_history (
     portfolio_value int not null,
     constraint fk_spotify_id_user_history foreign key(user_id) references user(user_id)
     );
+    
+insert into user_history values
+	('2019-04-13', '1', 5000),
+    ('2019-04-14', '1', 5048),
+    ('2019-04-15', '1', 5238),
+    ('2019-04-16', '1', 5186),
+    ('2019-04-17', '1', 5174),
+    ('2019-04-18', '1', 5288),
+    ('2019-04-19', '1', 5320);
+    
+    
     
 create table buy (
 	buy_id int primary key auto_increment,
@@ -151,6 +172,9 @@ create table sell (
 
             
 -- buying trigger
+-- prevents users from buying more shares than they can afford
+-- prevents users from purchasing outside of of market ours
+-- updates user's purchasing power based off purchase
 Drop Trigger If Exists buy_triggers;
 
 Delimiter //
@@ -217,6 +241,9 @@ Delimiter //
 
 
 -- trigger based of sales being made
+-- prevents users from selling more shares than they own
+-- prevents users from selling outside of of market ours
+-- updates user's purchasing power based off sale
 Create Trigger sell_triggers
 	Before Insert On sell
     For Each Row
@@ -236,16 +263,8 @@ Begin
 End //
  
 
--- updates song history every day
-create event update_song_history
-	on schedule every 1 day
-	starts '2019-01-01 00:05:00' 
-do
-	insert into song_history
-    select curdate(), spotify_id, song_value
-    from song;
 
--- updates user history every day
+-- updates user history every day (makes a copy of user's history at the end of the day)
 create event update_user_history
 	on schedule every 1 day
 	starts '2019-01-01 00:09:00'
@@ -275,17 +294,27 @@ Where user.user_id = daily_portfolio.user_id;
  
 Delimiter //
 insert into buy values
-	(1, 1, '1', 311, 5, '2019-04-08 12:02:54'),
-    (2, 1, '5', 108, 6, '2019-04-08 12:02:54'),
-    (3, 1, '5', 111, 5, '2019-04-09 12:02:54'),
-    (4, 1, '2', 111, 5, '2019-04-09 12:02:54'),
-    (5, 2, '2', 116, 3, '2019-04-10 12:02:54');
+	(1, 1, '1', 311, 5, '2019-04-13 12:02:54'),
+    (2, 1, '5', 108, 6, '2019-04-13 12:02:54'),
+    (3, 1, '5', 111, 5, '2019-04-15 12:02:54'),
+    (4, 1, '2', 111, 5, '2019-04-14 12:02:54'),
+    (5, 1, '4', 47, 5, '2019-04-16 12:02:54'),
+    (6, 1, '3', 110, 5, '2019-04-17 12:02:54');
 
 insert into sell values
-	(1, 1, '1', 293, 2, '2019-04-10 14:02:54'),
-    (2, 1, '5', 121, 10, '2019-04-10 14:02:54');
+	(1, 1, '1', 281, 2, '2019-04-17 14:02:54'),
+    (2, 1, '5', 118, 10, '2019-04-19 14:02:54');
+    
+
   
  
+Select genre_name
+From song
+Join artist Using(artist_id)
+Join genre Using(genre_id)
+Where spotify_id = 1;
+
+
 Select *
 From song;
 
